@@ -9,7 +9,6 @@ import { presentCollection as presentCollectionBase } from "@server/presenters";
 import AuthenticationHelper from "@shared/helpers/AuthenticationHelper";
 import { UrlHelper } from "@shared/utils/UrlHelper";
 import { CollectionPermission } from "@shared/types";
-import { DeprecationValidation } from "@shared/validations";
 import {
   success,
   error,

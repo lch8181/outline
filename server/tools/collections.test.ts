@@ -1,5 +1,4 @@
 import { CollectionPermission } from "@shared/types";
-import { DeprecationValidation } from "@shared/validations";
 import { Collection } from "@server/models";
 import { buildCollection, buildUser } from "@server/test/factories";
 import { getTestServer } from "@server/test/support";
