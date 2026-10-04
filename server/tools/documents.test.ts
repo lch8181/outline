@@ -407,6 +407,45 @@ describe("create_document", () => {
     expect(document.collectionId).toEqual(collection.id);
   });
 
+  it("can set workspace permission while creating a document", async () => {
+    const { user, accessToken } = await buildOAuthUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+      permission: null,
+    });
+
+    const res = await callMcpTool(server, accessToken, "create_document", {
+      title: "Shared Document",
+      text: "Shared content",
+      collectionId: collection.id,
+      permission: CollectionPermission.ReadWrite,
+    });
+
+    expect(res?.result?.isError).toBeUndefined();
+    await collection.reload();
+    expect(collection.permission).toEqual(CollectionPermission.ReadWrite);
+  });
+
+  it("keeps the collection permission unchanged when permission is omitted", async () => {
+    const { user, accessToken } = await buildOAuthUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+      permission: null,
+    });
+
+    const res = await callMcpTool(server, accessToken, "create_document", {
+      title: "Private Document",
+      text: "Private content",
+      collectionId: collection.id,
+    });
+
+    expect(res?.result?.isError).toBeUndefined();
+    await collection.reload();
+    expect(collection.permission).toEqual(null);
+  });
+
   it("creates from HTML and preserves images as attachments", async () => {
     const { user, accessToken } = await buildOAuthUser();
     const collection = await buildCollection({
