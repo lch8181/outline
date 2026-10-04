@@ -8,7 +8,13 @@ import documentCreator, {
 import documentMover from "@server/commands/documentMover";
 import documentRestorer from "@server/commands/documentRestorer";
 import documentUpdater from "@server/commands/documentUpdater";
-import { Collection, Document, SearchQuery, Template } from "@server/models";
+import {
+  Collection,
+  Document,
+  SearchQuery,
+  Template,
+  UserMembership,
+} from "@server/models";
 import { SearchQuerySource } from "@server/models/SearchQuery";
 import { combineFilters } from "@server/models/helpers/Filters";
 import DocumentImportTask from "@server/queues/tasks/DocumentImportTask";
@@ -36,7 +42,7 @@ import {
   withTracing,
 } from "./util";
 import { ValidationError } from "@server/errors";
-import { TextEditMode } from "@shared/types";
+import { CollectionPermission, TextEditMode } from "@shared/types";
 import type { Filter } from "@shared/helpers/FilterHelper";
 import SearchProviderManager from "@server/utils/SearchProviderManager";
 
@@ -420,6 +426,13 @@ export function documentTools(server: McpServer, scopes: string[]) {
             .describe(
               "Whether the document should occupy full width of the screen. Defaults to false. Do not set this to true for HTML input unless the user explicitly asks for a full-width document layout."
             ),
+          permission: z
+            .enum(CollectionPermission)
+            .nullable()
+            .optional()
+            .describe(
+              "Workspace-wide access for this document through its collection. Use read_write to let workspace members edit, read for read-only access, or null for private. Because Outline inherits workspace-wide document access from the collection, setting this changes the containing collection permission. Omit to keep the collection permission unchanged."
+            ),
         },
       },
       withTracing("create_document", async (input, context) => {
@@ -432,6 +445,44 @@ export function documentTools(server: McpServer, scopes: string[]) {
             collectionId,
             parentDocumentId,
           });
+
+          if (input.permission !== undefined) {
+            if (!collection) {
+              throw ValidationError(
+                "permission can only be set when creating a document in a collection"
+              );
+            }
+            authorize(user, "update", collection);
+
+            // When restricting a previously workspace-editable collection,
+            // ensure the actor retains admin access just like the REST API.
+            if (
+              input.permission !== CollectionPermission.ReadWrite &&
+              collection.permission === CollectionPermission.ReadWrite
+            ) {
+              const existingMembership = await UserMembership.findOne({
+                where: {
+                  collectionId: collection.id,
+                  userId: user.id,
+                },
+              });
+
+              if (!existingMembership) {
+                await UserMembership.create(
+                  {
+                    collectionId: collection.id,
+                    userId: user.id,
+                    permission: CollectionPermission.Admin,
+                    createdById: user.id,
+                  },
+                  { hooks: false }
+                );
+              }
+            }
+
+            collection.permission = input.permission;
+            await collection.saveWithCtx(ctx);
+          }
 
           let template: Template | null | undefined;
           if (templateId) {
