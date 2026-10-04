@@ -1,3 +1,5 @@
+import { CollectionPermission } from "@shared/types";
+import { DeprecationValidation } from "@shared/validations";
 import { Collection } from "@server/models";
 import { buildCollection, buildUser } from "@server/test/factories";
 import { getTestServer } from "@server/test/support";
@@ -91,6 +93,22 @@ describe("collection tools", () => {
     expect(collection.description).toEqual("A **test** description");
     expect(collection.icon).toEqual("rocket");
     expect(collection.color).toEqual("#FF0000");
+    expect(collection.permission).toEqual(CollectionPermission.ReadWrite);
+  });
+
+  it("create_collection allows an explicit private permission", async () => {
+    const { accessToken } = await buildOAuthUser();
+
+    const res = await callMcpTool(server, accessToken, "create_collection", {
+      name: "Private Collection",
+      permission: null,
+    });
+    const data = JSON.parse(res?.result?.content?.[0]?.text ?? "{}");
+
+    expect(data.success).toBe(true);
+    const collection = await Collection.findByPk(data.id, {
+      rejectOnEmpty: true,
+    });
     expect(collection.permission).toEqual(null);
   });
 
@@ -114,6 +132,24 @@ describe("collection tools", () => {
 
     await collection.reload();
     expect(collection.description).toEqual("Updated description");
+  });
+
+  it("update_collection updates workspace permission", async () => {
+    const { user, accessToken } = await buildOAuthUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+      permission: null,
+    });
+
+    const res = await callMcpTool(server, accessToken, "update_collection", {
+      id: collection.id,
+      permission: CollectionPermission.ReadWrite,
+    });
+
+    expect(res?.result?.isError).toBeUndefined();
+    await collection.reload();
+    expect(collection.permission).toEqual(CollectionPermission.ReadWrite);
   });
 
   it("update_collection errors when no fields are provided to update", async () => {

@@ -1,13 +1,15 @@
 import { z } from "zod";
 import { Sequelize, Op, type WhereOptions } from "sequelize";
 import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Collection, Team } from "@server/models";
+import { Collection, Team, UserMembership } from "@server/models";
 import { buildWhere } from "@server/models/helpers/Filters";
 import { sequelize } from "@server/storage/database";
 import { authorize } from "@server/policies";
 import { presentCollection as presentCollectionBase } from "@server/presenters";
 import AuthenticationHelper from "@shared/helpers/AuthenticationHelper";
 import { UrlHelper } from "@shared/utils/UrlHelper";
+import { CollectionPermission } from "@shared/types";
+import { DeprecationValidation } from "@shared/validations";
 import {
   success,
   error,
@@ -186,6 +188,13 @@ export function collectionTools(server: McpServer, scopes: string[]) {
           color: optionalString().describe(
             "The hex color for the collection icon, e.g. #FF0000."
           ),
+          permission: z
+            .enum(CollectionPermission)
+            .nullable()
+            .optional()
+            .describe(
+              "Workspace-wide access for the collection. Use read_write to let workspace members edit, read for read-only access, or null for a private collection. Defaults to read_write."
+            ),
         },
       },
       withTracing("create_collection", async (input, context) => {
@@ -204,7 +213,10 @@ export function collectionTools(server: McpServer, scopes: string[]) {
             color: input.color,
             teamId: user.teamId,
             createdById: user.id,
-            permission: null,
+            permission:
+              input.permission === undefined
+                ? CollectionPermission.ReadWrite
+                : input.permission,
           });
 
           await collection.saveWithCtx(ctx);
@@ -258,6 +270,13 @@ export function collectionTools(server: McpServer, scopes: string[]) {
             .describe(
               "The hex color for the collection icon. Set to null to remove."
             ),
+          permission: z
+            .enum(CollectionPermission)
+            .nullable()
+            .optional()
+            .describe(
+              "Workspace-wide access for the collection. Use read_write to let workspace members edit, read for read-only access, or null for a private collection."
+            ),
         },
       },
       withTracing("update_collection", async (input, context) => {
@@ -282,6 +301,38 @@ export function collectionTools(server: McpServer, scopes: string[]) {
           }
           if (input.color !== undefined) {
             collection.color = input.color;
+          }
+          if (input.permission !== undefined) {
+            // When restricting a previously workspace-editable collection,
+            // ensure the actor retains admin access just like the REST API.
+            if (
+              input.permission !== CollectionPermission.ReadWrite &&
+              collection.permission === CollectionPermission.ReadWrite
+            ) {
+              const existingMembership = await UserMembership.findOne({
+                where: {
+                  collectionId: collection.id,
+                  userId: user.id,
+                },
+                transaction: ctx.state.transaction,
+              });
+
+              if (!existingMembership) {
+                await UserMembership.create(
+                  {
+                    collectionId: collection.id,
+                    userId: user.id,
+                    permission: CollectionPermission.Admin,
+                    createdById: user.id,
+                  },
+                  {
+                    transaction: ctx.state.transaction,
+                    hooks: false,
+                  }
+                );
+              }
+            }
+            collection.permission = input.permission;
           }
 
           // A write that changes nothing must fail loud rather than return a
