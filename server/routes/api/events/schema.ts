@@ -14,6 +14,9 @@ export const EventsListSchema = BaseSchema.extend({
       )
       .optional(),
 
+    /** Partial originating IP address to filter by */
+    ip: z.string().trim().max(64).optional(),
+
     /** Id of the user who performed the action */
     actorId: z.uuid().optional(),
 
