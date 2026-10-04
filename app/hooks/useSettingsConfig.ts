@@ -17,6 +17,7 @@ import {
   InternetIcon,
   SmileyIcon,
   BrowserIcon,
+  HistoryIcon,
 } from "outline-icons";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -49,6 +50,7 @@ const Shares = lazy(() => import("~/scenes/Settings/Shares"));
 const Templates = lazy(() => import("~/scenes/Settings/Templates"));
 const CustomEmojis = lazy(() => import("~/scenes/Settings/CustomEmojis"));
 const Embeds = lazy(() => import("~/scenes/Settings/Embeds"));
+const AuditLog = lazy(() => import("~/scenes/Settings/AuditLog"));
 
 export type ConfigItem = {
   name: string;
@@ -170,6 +172,15 @@ const useSettingsConfig = () => {
         enabled: can.listGroups,
         group: t("Workspace"),
         icon: GroupIcon,
+      },
+      {
+        name: t("Audit Log"),
+        path: settingsPath("audit-log"),
+        component: AuditLog.Component,
+        preload: AuditLog.preload,
+        enabled: user.isAdmin,
+        group: t("Workspace"),
+        icon: HistoryIcon,
       },
       {
         name: t("Templates"),

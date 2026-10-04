@@ -87,6 +87,37 @@ describe("#events.list", () => {
     expect(body.data[1].id).toEqual(auditEvent.id);
   });
 
+  it("should allow filtering by IP address", async () => {
+    const user = await buildUser();
+    const admin = await buildAdmin({ teamId: user.teamId });
+
+    const matchingEvent = await buildEvent({
+      name: "users.signin",
+      teamId: user.teamId,
+      actorId: admin.id,
+      ip: "203.0.113.42",
+    });
+    await buildEvent({
+      name: "users.signin",
+      teamId: user.teamId,
+      actorId: admin.id,
+      ip: "198.51.100.7",
+    });
+
+    const res = await server.post("/api/events.list", admin, {
+      body: {
+        auditLog: true,
+        ip: "203.0.113",
+      },
+    });
+    const body = await res.json();
+
+    expect(res.status).toEqual(200);
+    expect(body.data.length).toEqual(1);
+    expect(body.data[0].id).toEqual(matchingEvent.id);
+    expect(body.data[0].actorIpAddress).toEqual("203.0.113.42");
+  });
+
   it("should allow filtering by actorId", async () => {
     const user = await buildUser();
     const admin = await buildAdmin({ teamId: user.teamId });

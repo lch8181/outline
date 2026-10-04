@@ -25,6 +25,7 @@ router.post(
       name,
       events,
       auditLog,
+      ip,
       actorId,
       documentId,
       collectionId,
@@ -50,6 +51,10 @@ router.post(
 
     if (name && (where.name as string[]).includes(name)) {
       where.name = name;
+    }
+
+    if (ip) {
+      where = { ...where, ip: { [Op.iLike]: `%${ip}%` } };
     }
 
     if (actorId) {
